@@ -180,6 +180,10 @@ public class WitherBossBar implements BossBar {
 		metadata.add(new Metadata(3, MetaType1_8.Byte, (byte) 1));
 		metadata.add(new Metadata(6, MetaType1_8.Float, health * 300f));
 
+		// The smallest possible size of the Wither
+		// higher values turn the Wither upside down, lower values increase its size
+		metadata.add(new Metadata(20, MetaType1_8.Int, 880));
+
 		packetWrapper.write(Types1_8.METADATA_LIST, metadata);
 
 		PacketUtil.sendPacket(packetWrapper, Protocol1_8TO1_9.class, true, false);
@@ -222,9 +226,10 @@ public class WitherBossBar implements BossBar {
 		double yawR = Math.toRadians(yaw);
 		double pitchR = Math.toRadians(pitch);
 
-		posX -= Math.cos(pitchR) * Math.sin(yawR) * 48;
-		posY -= Math.sin(pitchR) * 48;
-		posZ += Math.cos(pitchR) * Math.cos(yawR) * 48;
+		double distance = 32.0D;
+		posX -= Math.cos(pitchR) * Math.sin(yawR) * distance;
+		posY -= Math.sin(pitchR) * distance;
+		posZ += Math.cos(pitchR) * Math.cos(yawR) * distance;
 
 		setLocation(posX, posY, posZ);
 	}
