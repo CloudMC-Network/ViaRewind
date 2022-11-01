@@ -1,5 +1,7 @@
 package de.gerrygames.viarewind.protocol.protocol1_7_6_10to1_8.packets;
 
+import com.google.common.collect.Lists;
+import com.google.common.primitives.Ints;
 import com.viaversion.viaversion.api.minecraft.Position;
 import com.viaversion.viaversion.api.minecraft.entities.Entity1_10Types;
 import com.viaversion.viaversion.api.minecraft.item.Item;
@@ -9,6 +11,7 @@ import com.viaversion.viaversion.api.protocol.remapper.PacketRemapper;
 import com.viaversion.viaversion.api.type.Type;
 import com.viaversion.viaversion.api.type.types.version.Types1_8;
 import com.viaversion.viaversion.protocols.protocol1_8.ClientboundPackets1_8;
+import de.gerrygames.viarewind.protocol.protocol1_7_6_10to1_8.ClientboundPackets1_7;
 import de.gerrygames.viarewind.protocol.protocol1_7_6_10to1_8.Protocol1_7_6_10TO1_8;
 import de.gerrygames.viarewind.protocol.protocol1_7_6_10to1_8.items.ItemRewriter;
 import de.gerrygames.viarewind.protocol.protocol1_7_6_10to1_8.metadata.MetadataRewriter;
@@ -39,16 +42,21 @@ public class EntityPackets {
 					packetWrapper.set(Types1_7_6_10.COMPRESSED_NBT_ITEM, 0, item);
 				});
 				handler(packetWrapper -> {
-					if (packetWrapper.get(Type.SHORT, 0) > 4) packetWrapper.cancel();
+					EntityTracker tracker = packetWrapper.user().get(EntityTracker.class);
+					int id = packetWrapper.get(Type.INT, 0);
+					int limit = tracker.getPlayerId() == id ? 3 : 4;
+					if (packetWrapper.get(Type.SHORT, 0) > limit) packetWrapper.cancel();
 				});
 				handler(packetWrapper -> {
+					short slot = packetWrapper.get(Type.SHORT, 0);
 					if (packetWrapper.isCancelled()) return;
 					EntityTracker tracker = packetWrapper.user().get(EntityTracker.class);
 					UUID uuid = tracker.getPlayerUUID(packetWrapper.get(Type.INT, 0));
 					if (uuid == null) return;
-					Item[] equipment = tracker.getPlayerEquipment(uuid);
-					if (equipment == null) tracker.setPlayerEquipment(uuid, equipment = new Item[5]);
-					equipment[packetWrapper.get(Type.SHORT, 0)] = packetWrapper.get(Types1_7_6_10.COMPRESSED_NBT_ITEM, 0);
+
+					Item item = packetWrapper.get(Types1_7_6_10.COMPRESSED_NBT_ITEM, 0);
+					tracker.setPlayerEquipment(uuid, item, slot);
+
 					GameProfileStorage storage = packetWrapper.user().get(GameProfileStorage.class);
 					GameProfileStorage.GameProfile profile = storage.get(uuid);
 					if (profile != null && profile.gamemode == 3) packetWrapper.cancel();
@@ -96,19 +104,18 @@ public class EntityPackets {
 					EntityTracker tracker = packetWrapper.user().get(EntityTracker.class);
 					for (int entityId : entityIds) tracker.removeEntity(entityId);
 
-					while (entityIds.length > 127) {
-						int[] entityIds2 = new int[127];
-						System.arraycopy(entityIds, 0, entityIds2, 0, 127);
-						int[] temp = new int[entityIds.length - 127];
-						System.arraycopy(entityIds, 127, temp, 0, temp.length);
-						entityIds = temp;
+					List<List<Integer>> parts = Lists.partition(Ints.asList(entityIds), Byte.MAX_VALUE);
 
-						PacketWrapper destroy = PacketWrapper.create(0x13, null, packetWrapper.user());
-						destroy.write(Types1_7_6_10.INT_ARRAY, entityIds2);
+					for (int i = 0; i < parts.size() - 1; i++) {
+						PacketWrapper destroy = PacketWrapper.create(ClientboundPackets1_7.DESTROY_ENTITIES,
+								packetWrapper.user());
+						destroy.write(Types1_7_6_10.INT_ARRAY, parts.get(i).stream()
+								.mapToInt(Integer::intValue).toArray());
 						PacketUtil.sendPacket(destroy, Protocol1_7_6_10TO1_8.class);
 					}
 
-					packetWrapper.write(Types1_7_6_10.INT_ARRAY, entityIds);
+					packetWrapper.write(Types1_7_6_10.INT_ARRAY, parts.get(parts.size() - 1).stream()
+							.mapToInt(Integer::intValue).toArray());
 				});  //Entity Id Array
 			}
 		});
@@ -173,7 +180,7 @@ public class EntityPackets {
 				map(Type.BYTE);  //z
 				map(Type.BYTE);  //yaw
 				map(Type.BYTE);  //pitch
-				map(Type.BOOLEAN,Type.NOTHING);
+				map(Type.BOOLEAN, Type.NOTHING);
 				handler(packetWrapper -> {
 					int entityId = packetWrapper.get(Type.INT, 0);
 					EntityTracker tracker = packetWrapper.user().get(EntityTracker.class);
